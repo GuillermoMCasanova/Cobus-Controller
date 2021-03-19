@@ -1,0 +1,8 @@
+# Editor files
+.vscode
+
+# Python cache
+__pycache__
+
+# Credentials
+firebasekey.json
