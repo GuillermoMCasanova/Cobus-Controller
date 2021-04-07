@@ -1,8 +1,9 @@
 """Cobus controler."""
 
-# Firebase admin
-import firebase_admin
-from firebase_admin import db
+# Firebase
+from firebase import firebase
+# import firebase_admin
+# from firebase_admin import db
 
 # Standard library
 from datetime import datetime
@@ -18,7 +19,7 @@ class Cobus:
     could genereate inconsistences at database.
     """
 
-    def __init__(self, key_path, unit_name, max_passengers, clean_at_startup=False):
+    def __init__(self, unit_name, max_passengers, clean_at_startup=False):
         """
         __init__.
 
@@ -27,17 +28,12 @@ class Cobus:
         max_passengers is the maximum number of passengers allowed in bus.
         clean_at_startup is dangerous, if it is True, delete the previus data about this unity.
         """
-        # Credential validation
-        self.credential = firebase_admin.credentials.Certificate('./firebasekey.json')
         # App initialize
-        self.app = firebase_admin.initialize_app(
-            credential=self.credential,
-            options={
-                'databaseURL': 'https://cobus-e38dc-default-rtdb.firebaseio.com/'
-            })
+        self.db = firebase.FirebaseApplication('https://cobus-e38dc-default-rtdb.firebaseio.com/', None)
         # Collections reference
-        self.current_state_db = firebase_admin.db.reference('/{}/current_state'.format(unit_name))
-        self.record_states_db = firebase_admin.db.reference('/{}/record_states'.format(unit_name))
+        self.base_url = '/{}'.format(unit_name)
+        self.current_state_url = '/{}/current_state'.format(unit_name)
+        self.record_states_url = '/{}/record_states'.format(unit_name)
         # Attributes
         self.unit_name = unit_name
         self.max_passengers = max_passengers
@@ -47,7 +43,7 @@ class Cobus:
             self.clean_record_states()
         else:
             # Get initial data from server
-            self.sync_with_server()
+            self.sync_with_server(reverse=True)
 
     def update_number_of_passengers(self, action, number=1, on_server=True):
         """
@@ -71,9 +67,13 @@ class Cobus:
 
         if on_server:
             try:
-                self.current_state_db.set({
-                    'number_of_passengers': self.number_of_passengers
-                })
+                self.db.put(
+                    url=self.current_state_url,
+                    name='number_of_passengers',
+                    data={
+                        'number_of_passengers': self.number_of_passengers
+                    }
+                )
                 print('[SUCCESS] Number of passengers modified on server.')
                 return True
             except Exception:
@@ -124,7 +124,10 @@ class Cobus:
 
         if on_server:
             try:
-                self.record_states_db.push(state)
+                self.db.post(
+                    url=self.record_states_url,
+                    data=state
+                )
                 print('[SUCCESS] Record state saved on server.')
                 return True
             except Exception:
@@ -142,9 +145,13 @@ class Cobus:
 
         self.number_of_passengers = 0
         try:
-            self.current_state_db.set({
-                'number_of_passengers': 0
-            })
+            self.db.put(
+                url=self.current_state_url,
+                name='number_of_passengers',
+                data={
+                    'number_of_passengers': self.number_of_passengers
+                }
+            )
             return True
         except Exception:
             print('[ERROR] Could not perform this action.')
@@ -159,7 +166,10 @@ class Cobus:
 
         self.record_states = []
         try:
-            self.record_states_db.set({})
+            self.db.delete(
+                url=self.base_url,
+                name='record_states',
+            )
             self.push_record_state()
             return True
         except Exception:
@@ -176,14 +186,34 @@ class Cobus:
 
         try:
             if reverse:
-                self.number_of_passengers = self.current_state_db.get().get('number_of_passengers', 0)
-                self.record_states = list(self.record_states_db.order_by_key().limit_to_first(99).get().values())
+                self.number_of_passengers = self.db.get(
+                    url=self.current_state_url,
+                    name='number_of_passengers'
+                ).get('number_of_passengers', 0)
+                _record_states = self.db.get(
+                    url=self.base_url,
+                    name='record_states'
+                )
+                self.record_states = list(_record_states.values())
                 self.check_state()
             else:
-                self.current_state_db.set({'number_of_passengers': self.number_of_passengers})
-                self.record_states_db.set({})
+                self.db.put(
+                    url=self.current_state_url,
+                    name='number_of_passengers',
+                    data={
+                        'number_of_passengers': self.number_of_passengers
+                    }
+                )
+                self.db.delete(
+                    url=self.base_url,
+                    name='record_states',
+                )
+
                 for record in self.record_states:
-                    self.record_states_db.push(record)
+                    self.db.post(
+                        url=self.record_states_url,
+                        data=record
+                    )
             return True
         except Exception:
             print('[ERROR] Could not perform this action.')

@@ -12,10 +12,10 @@ menu_options = """
 6. Print local data.
 7. Sync with server.
 8. Sync with server on reverse.
-100. Exitr
+100. Exit
 >>> """
 
-cobus = Cobus(key_path='./firebasekey.json', unit_name='test', max_passengers=5, clean_at_startup=True)
+cobus = Cobus(unit_name='test', max_passengers=5, clean_at_startup=True)
 
 while True:
     selector = input(menu_options)
